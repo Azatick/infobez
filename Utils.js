@@ -29,10 +29,20 @@ function getNumRound(m, q) {
     return table[m][q];
 }
 exports.getNumRound = getNumRound;
+function xorArrays(a, b) {
+    return _.range(0, a.length).map(function (i) {
+        return a[i] ^ b[i];
+    });
+}
+exports.xorArrays = xorArrays;
 function getSBoxValue(n) {
     return sBox[n];
 }
 exports.getSBoxValue = getSBoxValue;
+function removeNullFromString(string) {
+    return string.replace(/\0/g, "");
+}
+exports.removeNullFromString = removeNullFromString;
 function base64Encode(input) {
     return new Buffer(input, 'binary').toString('base64');
 }

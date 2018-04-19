@@ -30,8 +30,18 @@ export function getNumRound (m: bytesCount, q: bytesCount) {
     return table[m][q];
 }
 
+export function xorArrays (a: number[], b: number[]) {
+    return _.range(0, a.length).map(i => {
+        return a[i] ^ b[i]
+    })
+}
+
 export function getSBoxValue (n: number) {
     return sBox[n]
+}
+
+export function removeNullFromString (string: string) {
+    return string.replace(/\0/g, "")
 }
 
 export function base64Encode (input: string) {

@@ -2,13 +2,16 @@
 exports.__esModule = true;
 var Utils = require("./Utils");
 var _ = require("lodash");
+var ECB_1 = require("./modes/ECB");
+var PBC_1 = require("./modes/PBC");
 var Rijndael = /** @class */ (function () {
-    function Rijndael(blockSize, keySize) {
+    function Rijndael(mode, blockSize, keySize) {
         if (blockSize === void 0) { blockSize = 16; }
         if (keySize === void 0) { keySize = 16; }
         this.blockSize = blockSize;
         this.keySize = keySize;
         this.NB = blockSize / 4;
+        this.mode = this.getMode(mode);
     }
     Rijndael.prototype.cipher = function (input, keySchedule) {
         var _this = this;
@@ -180,51 +183,17 @@ var Rijndael = /** @class */ (function () {
         word[3] = temp;
         return word;
     };
-    Rijndael.prototype.encode = function (input, password) {
-        var _this = this;
-        var plaintext = Utils.utf8Encode(input);
-        this.password = Utils.utf8Encode(password);
-        var passwordBytes = Utils.getBytesArray(this.password, this.keySize);
-        var keySchedule = this.keyExpansion(passwordBytes);
-        var countOfBlocks = Math.ceil(plaintext.length / this.blockSize);
-        var cipherText = '';
-        _.range(0, countOfBlocks)
-            .map(function (block) {
-            var textBlock = plaintext.slice(block * _this.blockSize, (block + 1) * _this.blockSize);
-            var cipher = _this.cipher(Utils.getBytesArray(textBlock, _this.blockSize), keySchedule);
-            var cipherChar = new Array(_this.blockSize);
-            _.range(0, _this.blockSize)
-                .map(function (i) {
-                cipherChar[i] = String.fromCharCode(cipher[i]);
-            });
-            cipherText += cipherChar.join('');
-        });
-        return Utils.base64Encode(cipherText);
+    Rijndael.prototype.encode = function (input, password, iv) {
+        return this.mode.encode(input, password, iv);
     };
-    Rijndael.prototype.decode = function (input, password) {
-        var _this = this;
-        var encodedText = Utils.base64Decode(String(input));
-        var passwordBytes = Utils.getBytesArray(password, this.keySize);
-        var keySchedule = this.keyExpansion(passwordBytes);
-        // разделяем зашифрованный текст на блоки
-        var countOfBlocks = Math.ceil((encodedText.length - 8) / this.blockSize);
-        var ct = new Array(countOfBlocks);
-        _.range(0, countOfBlocks)
-            .map(function (b) { return ct[b] = encodedText.slice(8 + b * _this.blockSize, 8 + b * _this.blockSize + _this.blockSize); });
-        var decipherText = '';
-        console.log(countOfBlocks);
-        _.range(0, countOfBlocks)
-            .map(function (block) {
-            var encodedBlock = encodedText.slice(block * _this.blockSize, (block + 1) * _this.blockSize);
-            var decipher = _this.decipher(Utils.getBytesArray(encodedBlock, _this.blockSize), keySchedule);
-            var decipherChars = new Array(_this.blockSize);
-            _.range(0, _this.blockSize)
-                .map(function (i) {
-                decipherChars[i] = String.fromCharCode(decipher[i]);
-            });
-            decipherText += decipherChars.join('');
-        });
-        return decipherText;
+    Rijndael.prototype.decode = function (input, password, iv) {
+        return this.mode.decode(input, password, iv);
+    };
+    Rijndael.prototype.getMode = function (mode) {
+        switch (mode) {
+            case "ecb": return new ECB_1["default"](this);
+            case "pbc": return new PBC_1["default"](this);
+        }
     };
     return Rijndael;
 }());

@@ -1,9 +1,11 @@
 "use strict";
 exports.__esModule = true;
 var Rijndael_1 = require("./Rijndael");
-var cipher = new Rijndael_1["default"](16, 16);
+var _ = require("lodash");
+var cipher = new Rijndael_1["default"]('pbc', 16, 16);
 var pass = '5656';
-var encoded = cipher.encode("The secret", pass);
-var decoded = cipher.decode(encoded, pass);
+var iv = (_.random(0, _.random(0, 1000)) * new Date().valueOf()).toString();
+var encoded = cipher.encode("The secret 12345 dsfdis", pass, iv);
+var decoded = cipher.decode(encoded, pass, iv);
 console.log("Encoded: " + encoded);
 console.log("Decoded: " + decoded);

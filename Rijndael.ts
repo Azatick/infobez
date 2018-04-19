@@ -1,5 +1,8 @@
 import * as Utils from "./Utils"
 import * as _ from 'lodash'
+import ECB from "./modes/ECB";
+import PBC from "./modes/PBC";
+import {MODE} from "./modes/Interfaces";
 
 export default class Rijndael {
 
@@ -8,11 +11,13 @@ export default class Rijndael {
     keySize: Utils.bytesCount
     NB: number
     NK: number
+    mode: ECB | PBC;
 
-    constructor (blockSize: Utils.bytesCount = 16, keySize: Utils.bytesCount = 16) {
+    constructor (mode: MODE, blockSize: Utils.bytesCount = 16, keySize: Utils.bytesCount = 16) {
         this.blockSize = blockSize
         this.keySize = keySize
         this.NB = blockSize / 4
+        this.mode = this.getMode(mode)
     }
 
     cipher (input: number[], keySchedule: number[][]) {
@@ -205,70 +210,19 @@ export default class Rijndael {
         return word
     }
 
-    encode (input: string, password: string) {
-
-        let plaintext = Utils.utf8Encode(input)
-        this.password = Utils.utf8Encode(password)
-
-        const passwordBytes = Utils.getBytesArray(this.password, this.keySize)
-
-        const keySchedule = this.keyExpansion(passwordBytes)
-
-        const countOfBlocks = Math.ceil(plaintext.length / this.blockSize)
-        let cipherText = ''
-
-        _.range(0, countOfBlocks)
-            .map(block => {
-                const textBlock = plaintext.slice(block*this.blockSize, (block+1)*this.blockSize)
-
-                const cipher = this.cipher(Utils.getBytesArray(textBlock, this.blockSize), keySchedule)
-
-                const cipherChar = new Array(this.blockSize)
-
-                _.range(0, this.blockSize)
-                    .map(i => {
-                        cipherChar[i] = String.fromCharCode(cipher[i])
-                    })
-
-                cipherText += cipherChar.join('')
-
-            })
-        return Utils.base64Encode(cipherText)
+    encode (input: string, password: string, iv?: string) {
+        return this.mode.encode(input, password, iv)
     }
 
-    decode (input: string, password: string) {
+    decode (input: string, password: string, iv?: string) {
+        return this.mode.decode(input, password, iv)
+    }
 
-        let encodedText = Utils.base64Decode(String(input))
-
-        const passwordBytes = Utils.getBytesArray(password, this.keySize)
-
-        const keySchedule = this.keyExpansion(passwordBytes)
-
-        // разделяем зашифрованный текст на блоки
-        const countOfBlocks = Math.ceil((encodedText.length - 8) / this.blockSize)
-        let ct = new Array(countOfBlocks)
-        _.range(0, countOfBlocks)
-            .map(b => ct[b] = encodedText.slice(8+b*this.blockSize, 8+b*this.blockSize + this.blockSize))
-        let decipherText = ''
-
-        console.log(countOfBlocks)
-
-        _.range(0, countOfBlocks)
-            .map(block => {
-                const encodedBlock = encodedText.slice(block*this.blockSize, (block+1)*this.blockSize)
-                const decipher = this.decipher(Utils.getBytesArray(encodedBlock, this.blockSize), keySchedule)
-
-                let decipherChars = new Array(this.blockSize)
-
-                _.range(0, this.blockSize)
-                    .map(i => {
-                        decipherChars[i] = String.fromCharCode(decipher[i])
-                    })
-
-                decipherText += decipherChars.join('')
-
-            })
-        return decipherText
+    private getMode (mode: MODE) {
+        switch (mode) {
+            case "ecb": return new ECB(this);
+            case "pbc": return new PBC(this);
+        }
     }
 
 }
