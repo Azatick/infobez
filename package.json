@@ -1,0 +1,22 @@
+{
+  "name": "aes",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@types/chai": "^4.1.2",
+    "@types/lodash": "^4.14.106",
+    "@types/mocha": "^5.1.0",
+    "@types/text-encoding": "^0.0.32",
+    "chai": "^4.1.2",
+    "lodash": "^4.17.5",
+    "mocha": "^5.1.1",
+    "rye": "^0.0.3",
+    "text-encoding": "^0.6.4",
+    "ts-node": "^6.0.0",
+    "typescript": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^9.6.4"
+  }
+}
