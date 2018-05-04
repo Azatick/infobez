@@ -19,7 +19,7 @@ export default class Groestl {
 
         this.outputSize = outputSize;
         this.blockSize = this.getBlockSize(outputSize);
-        this.rounds = this.blockSize == 512 ? 7 : 9;
+        this.rounds = this.blockSize == 512 ? 10 : 14;
         this.NB = this.blockSize == 512 ? 8 : 16;
 
     }
@@ -60,15 +60,16 @@ export default class Groestl {
 
     // TODO: починить pad функцию - из-за нее все ломается
     pad (input: string) {
-        const N = input.length;
-        const w = (-N - 65) % this.blockSize;
-        this.blockCount = ( N + w + 65 ) / this.blockSize;
-        if (this.blockCount == 0) this.blockCount = 1;
-        // console.log(N, w, ( N + w + 65 ) / this.blockSize);
+        const N = input.length * 8,
+            w = (- N - 65) % this.blockSize,
+            t = ( N + w + 65 ) / this.blockSize;
+        this.blockCount = t + 1;
+        console.log('N', N, w, t)
         let bytes = Utils.stringBytesArray(input);
-        bytes.push(0x1);
-        _.range(0, w).map(v => bytes.push(0x0));
-        // console.log(this.blockCount)
+        // console.log(bytes.join(' '))
+        bytes.unshift(0x1);
+        _.range(0, w).map(v => bytes.unshift(0x0));
+        bytes.unshift(t);
         return bytes;
     }
 
@@ -194,17 +195,20 @@ export default class Groestl {
     hash (input: string) {
 
         let padded = this.pad(input);
-        let blocks = new Array(this.blockCount);
+
+        console.log(padded.length, padded.join())
+
+        let blocks = [];
 
         _.range(0, this.blockCount)
             .map(i => {
                 let block = padded.slice(i*this.blockSize, this.blockSize);
-                blocks.push(_.range(0, 8).map(row => {
+                let block2d = _.range(0, 8).map(row => {
                     return _.range(0, this.NB).map(col => {
                         return block[row * this.NB + col]
                     })
-                }))
-                // console.log(block.length, block.join())
+                });
+                blocks.push(block2d)
             })
 
         let chainingOutputs = [ this.getInitialValue() ];
@@ -221,7 +225,7 @@ export default class Groestl {
 
     final (input: number[][]) {
         input = _.xor(this.P(input), input);
-        return Utils.to1DArray(input).slice(-this.outputSize/4);
+        return Utils.to1DArray(input).slice();
     }
 
 

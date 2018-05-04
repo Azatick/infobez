@@ -6,7 +6,7 @@ var Groestl = /** @class */ (function () {
     function Groestl(outputSize) {
         this.outputSize = outputSize;
         this.blockSize = this.getBlockSize(outputSize);
-        this.rounds = this.blockSize == 512 ? 7 : 9;
+        this.rounds = this.blockSize == 512 ? 10 : 14;
         this.NB = this.blockSize == 512 ? 8 : 16;
     }
     /**
@@ -46,16 +46,14 @@ var Groestl = /** @class */ (function () {
     };
     // TODO: починить pad функцию - из-за нее все ломается
     Groestl.prototype.pad = function (input) {
-        var N = input.length;
-        var w = (-N - 65) % this.blockSize;
-        this.blockCount = (N + w + 65) / this.blockSize;
-        if (this.blockCount == 0)
-            this.blockCount = 1;
-        // console.log(N, w, ( N + w + 65 ) / this.blockSize);
+        var N = input.length * 8, w = (-N - 65) % this.blockSize, t = (N + w + 65) / this.blockSize;
+        this.blockCount = t + 1;
+        console.log('N', N, w, t);
         var bytes = Utils.stringBytesArray(input);
-        bytes.push(0x1);
-        _.range(0, w).map(function (v) { return bytes.push(0x0); });
-        // console.log(this.blockCount)
+        // console.log(bytes.join(' '))
+        bytes.unshift(0x1);
+        _.range(0, w).map(function (v) { return bytes.unshift(0x0); });
+        bytes.unshift(t);
         return bytes;
     };
     Groestl.prototype.addRoundConstantP = function (state, round) {
@@ -168,16 +166,17 @@ var Groestl = /** @class */ (function () {
     Groestl.prototype.hash = function (input) {
         var _this = this;
         var padded = this.pad(input);
-        var blocks = new Array(this.blockCount);
+        console.log(padded.length, padded.join());
+        var blocks = [];
         _.range(0, this.blockCount)
             .map(function (i) {
             var block = padded.slice(i * _this.blockSize, _this.blockSize);
-            blocks.push(_.range(0, 8).map(function (row) {
+            var block2d = _.range(0, 8).map(function (row) {
                 return _.range(0, _this.NB).map(function (col) {
                     return block[row * _this.NB + col];
                 });
-            }));
-            // console.log(block.length, block.join())
+            });
+            blocks.push(block2d);
         });
         var chainingOutputs = [this.getInitialValue()];
         blocks.map(function (block, i) {
@@ -188,7 +187,7 @@ var Groestl = /** @class */ (function () {
     };
     Groestl.prototype.final = function (input) {
         input = _.xor(this.P(input), input);
-        return Utils.to1DArray(input).slice(-this.outputSize / 4);
+        return Utils.to1DArray(input).slice();
     };
     return Groestl;
 }());

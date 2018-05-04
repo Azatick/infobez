@@ -11,7 +11,7 @@ var __extends = (this && this.__extends) || (function () {
 })();
 exports.__esModule = true;
 var _ = require("lodash");
-var Utils = require("../Rijndael/Utils");
+var Utils = require("../Utils");
 var AMode_1 = require("./AMode");
 var PBC = /** @class */ (function (_super) {
     __extends(PBC, _super);

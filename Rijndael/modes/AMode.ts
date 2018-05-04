@@ -1,4 +1,4 @@
-import Rijndael from "../Rijndael/Rijndael";
+import Rijndael from "../Rijndael";
 
 export default abstract class AMode {
 

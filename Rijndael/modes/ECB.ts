@@ -1,6 +1,6 @@
 import * as _ from "lodash";
-import * as Utils from "../Rijndael/Utils";
-import Rijndael from "../Rijndael/Rijndael";
+import * as Utils from "../Utils";
+import Rijndael from "../Rijndael";
 import AMode from "./AMode";
 
 export default class ECB extends AMode {

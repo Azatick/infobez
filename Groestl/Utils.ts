@@ -51,9 +51,8 @@ export function shiftToLeft(array: any[], pos: number) {
             let ind = i + (array.length - pos);
             if (ind >= array.length) {
                 temp[ind - array.length] = array[i];
-            } else temp[ind] = array[i]
-
-        })
+            } else temp[ind] = array[i];
+        });
     return temp;
 }
 

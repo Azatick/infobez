@@ -1,7 +1,7 @@
 import * as _ from "lodash";
-import * as Utils from "../Rijndael/Utils";
+import * as Utils from "../Utils";
 import AMode from "./AMode";
-import Rijndael from "../Rijndael/Rijndael";
+import Rijndael from "../Rijndael";
 
 export default class PBC extends AMode {
 
