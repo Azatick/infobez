@@ -2,8 +2,8 @@
 exports.__esModule = true;
 var Utils = require("./Utils");
 var _ = require("lodash");
-var ECB_1 = require("./modes/ECB");
-var PBC_1 = require("./modes/PBC");
+var ECB_1 = require("../modes/ECB");
+var PBC_1 = require("../modes/PBC");
 var Rijndael = /** @class */ (function () {
     function Rijndael(mode, blockSize, keySize) {
         if (blockSize === void 0) { blockSize = 16; }

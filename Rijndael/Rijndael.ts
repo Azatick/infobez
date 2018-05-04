@@ -1,8 +1,8 @@
 import * as Utils from "./Utils"
 import * as _ from 'lodash'
-import ECB from "./modes/ECB";
-import PBC from "./modes/PBC";
-import {MODE} from "./modes/Interfaces";
+import ECB from "../modes/ECB";
+import PBC from "../modes/PBC";
+import {MODE} from "../modes/Interfaces";
 
 export default class Rijndael {
 
