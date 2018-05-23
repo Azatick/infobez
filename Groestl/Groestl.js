@@ -44,102 +44,72 @@ var Groestl = /** @class */ (function () {
                 return iv;
         }
     };
-    // TODO: починить pad функцию - из-за нее все ломается
     Groestl.prototype.pad = function (input) {
-        var N = input.length * 8, w = (-N - 65) % this.blockSize, t = (N + w + 65) / this.blockSize;
-        this.blockCount = t + 1;
-        console.log('N', N, w, t);
-        var bytes = Utils.stringBytesArray(input);
-        // console.log(bytes.join(' '))
-        bytes.unshift(0x1);
-        _.range(0, w).map(function (v) { return bytes.unshift(0x0); });
-        bytes.unshift(t);
-        return bytes;
+        var N = input.length * 8, l = this.blockSize, w = Utils.negMod(-N - 65, l), t = (N + w + 65) / l;
+        this.blockCount = t;
+        var bytes = Utils.stringToBytesArray(input);
+        var bits = bytes.map(function (v) { return Utils.toBitsString(v); }).join('');
+        bits += 1;
+        bits += _.range(0, w).fill(0).join('');
+        bits += Utils.get64Representation(t).map(function (v) { return Utils.toBitsString(v); }).join('');
+        return Utils.bitsStringToBytes(bits);
     };
     Groestl.prototype.addRoundConstantP = function (state, round) {
-        var _this = this;
-        state = state.slice();
-        var PTable = Utils.getP(this.NB, round);
-        return _.range(0, 8).map(function (r) {
-            _.range(0, _this.NB).map(function (c) {
-                state[r][c] = PTable[r][c] ^ state[r][c];
-            });
-            return state[r];
-        });
+        return Utils.xorMatrix(state, Utils.getPTableConstant(this.NB, round));
     };
     Groestl.prototype.addRoundConstantQ = function (state, round) {
-        var _this = this;
-        state = state.slice();
-        var QTable = Utils.getQ(this.NB, round);
-        return _.range(0, 8).map(function (r) {
-            _.range(0, _this.NB).map(function (c) {
-                state[r][c] = QTable[r][c] ^ state[r][c];
-            });
-            return state[r];
-        });
+        return Utils.xorMatrix(state, Utils.getQTableContstant(this.NB, round));
     };
     Groestl.prototype.subBytes = function (state) {
-        var _this = this;
-        state = state.slice();
-        return _.range(0, 8).map(function (r) {
-            _.range(0, _this.NB).map(function (c) {
-                state[r][c] = Utils.getSBoxValue(state[r][c]);
+        return state.map(function (row) {
+            return row.map(function (e) {
+                return Utils.getSBoxValue(e);
             });
-            return state[r];
         });
     };
     Groestl.prototype.shiftBytesP = function (state) {
-        state = state.slice();
-        var shiftArray = [];
-        switch (this.blockSize) {
-            case 512:
-                shiftArray = [0, 1, 2, 3, 4, 5, 6, 7];
-                break;
-            case 1024:
-                shiftArray = [1, 3, 5, 7, 0, 2, 4, 6];
-        }
-        _.range(0, 8)
-            .map(function (row) { return state[row] = Utils.shiftToLeft(state[row], shiftArray[row]); });
-        return state;
+        var shiftArray = Utils.getPShifts(this.blockSize);
+        return _.range(0, 8).map(function (row) { return Utils.shiftToLeft(state[row], shiftArray[row]); });
     };
     Groestl.prototype.shiftBytesQ = function (state) {
-        state = state.slice();
-        var shiftArray = [];
-        switch (this.blockSize) {
-            case 512:
-                shiftArray = [0, 1, 2, 3, 4, 5, 6, 11];
-                break;
-            case 1024:
-                shiftArray = [1, 3, 5, 11, 0, 2, 4, 6];
-        }
-        _.range(0, 8)
-            .map(function (row) { return state[row] = Utils.shiftToLeft(state[row], shiftArray[row]); });
-        return state;
+        var shiftArray = Utils.getQShifts(this.blockSize);
+        return _.range(0, 8).map(function (row) { return Utils.shiftToLeft(state[row], shiftArray[row]); });
     };
     Groestl.prototype.mixBytes = function (state) {
-        state = state.slice();
-        function mul1(b) { return b; }
-        function mul2(b) { return ((0 != (b >>> 7)) ? ((b) << 1) ^ 0x1b : ((b) << 1)); }
-        function mul3(b) { return (mul2(b) ^ mul1(b)); }
-        function mul4(b) { return (mul2(mul2(b))); }
-        function mul5(b) { return (mul4(b) ^ mul1(b)); }
-        function mul6(b) { return (mul4(b) ^ mul2(b)); }
-        function mul7(b) { return (mul4(b) ^ mul2(b) ^ mul1(b)); }
-        _.range(0, this.NB).map(function (col) {
-            var temp = [];
-            _.range(0, 8).map(function (row) {
-                temp[row] =
-                    mul2(state[(row + 0) % 8][col]) ^ mul2(state[(row + 1) % 8][col]) ^
-                        mul3(state[(row + 2) % 8][col]) ^ mul4(state[(row + 3) % 8][col]) ^
-                        mul5(state[(row + 4) % 8][col]) ^ mul3(state[(row + 5) % 8][col]) ^
-                        mul5(state[(row + 6) % 8][col]) ^ mul7(state[(row + 7) % 8][col]);
-            });
-            _.range(0, 8).map(function (i) { return state[i][col] = temp[i]; });
+        var b02 = 2, b03 = 3, b05 = 5, b04 = 4, b07 = 7;
+        _.range(0, this.NB).map(function (c) {
+            var sp = [];
+            sp[0] = Utils.GF256(b02, state[0][c]) ^ Utils.GF256(b02, state[1][c]) ^ Utils.GF256(b03, state[2][c]) ^
+                Utils.GF256(b04, state[3][c]) ^ Utils.GF256(b05, state[4][c]) ^ Utils.GF256(b03, state[5][c]) ^
+                Utils.GF256(b05, state[6][c]) ^ Utils.GF256(b07, state[7][c]);
+            sp[1] = Utils.GF256(b07, state[0][c]) ^ Utils.GF256(b02, state[1][c]) ^ Utils.GF256(b02, state[2][c]) ^
+                Utils.GF256(b03, state[3][c]) ^ Utils.GF256(b04, state[4][c]) ^ Utils.GF256(b05, state[5][c]) ^
+                Utils.GF256(b03, state[6][c]) ^ Utils.GF256(b05, state[7][c]);
+            sp[2] = Utils.GF256(b05, state[0][c]) ^ Utils.GF256(b07, state[1][c]) ^ Utils.GF256(b02, state[2][c]) ^
+                Utils.GF256(b02, state[3][c]) ^ Utils.GF256(b03, state[4][c]) ^ Utils.GF256(b04, state[5][c]) ^
+                Utils.GF256(b05, state[6][c]) ^ Utils.GF256(b03, state[7][c]);
+            sp[3] = Utils.GF256(b03, state[0][c]) ^ Utils.GF256(b05, state[1][c]) ^ Utils.GF256(b07, state[2][c]) ^
+                Utils.GF256(b02, state[3][c]) ^ Utils.GF256(b02, state[4][c]) ^ Utils.GF256(b03, state[5][c]) ^
+                Utils.GF256(b04, state[6][c]) ^ Utils.GF256(b05, state[7][c]);
+            sp[4] = Utils.GF256(b05, state[0][c]) ^ Utils.GF256(b03, state[1][c]) ^ Utils.GF256(b05, state[2][c]) ^
+                Utils.GF256(b07, state[3][c]) ^ Utils.GF256(b02, state[4][c]) ^ Utils.GF256(b02, state[5][c]) ^
+                Utils.GF256(b03, state[6][c]) ^ Utils.GF256(b04, state[7][c]);
+            sp[5] = Utils.GF256(b04, state[0][c]) ^ Utils.GF256(b05, state[1][c]) ^ Utils.GF256(b03, state[2][c]) ^
+                Utils.GF256(b05, state[3][c]) ^ Utils.GF256(b07, state[4][c]) ^ Utils.GF256(b02, state[5][c]) ^
+                Utils.GF256(b02, state[6][c]) ^ Utils.GF256(b03, state[7][c]);
+            sp[6] = Utils.GF256(b03, state[0][c]) ^ Utils.GF256(b04, state[1][c]) ^ Utils.GF256(b05, state[2][c]) ^
+                Utils.GF256(b03, state[3][c]) ^ Utils.GF256(b05, state[4][c]) ^ Utils.GF256(b07, state[5][c]) ^
+                Utils.GF256(b02, state[6][c]) ^ Utils.GF256(b02, state[7][c]);
+            sp[7] = Utils.GF256(b02, state[0][c]) ^ Utils.GF256(b03, state[1][c]) ^ Utils.GF256(b04, state[2][c]) ^
+                Utils.GF256(b05, state[3][c]) ^ Utils.GF256(b03, state[4][c]) ^ Utils.GF256(b05, state[5][c]) ^
+                Utils.GF256(b07, state[6][c]) ^ Utils.GF256(b02, state[7][c]);
+            _.range(0, 8).map(function (i) { return state[i][c] = sp[i]; });
         });
         return state;
     };
     Groestl.prototype.P = function (state) {
         var _this = this;
+        state = state.slice();
         _.range(0, this.rounds)
             .map(function (round) {
             state = _this.addRoundConstantP(state, round);
@@ -151,6 +121,7 @@ var Groestl = /** @class */ (function () {
     };
     Groestl.prototype.Q = function (state) {
         var _this = this;
+        state = state.slice();
         _.range(0, this.rounds)
             .map(function (round) {
             state = _this.addRoundConstantQ(state, round);
@@ -161,33 +132,31 @@ var Groestl = /** @class */ (function () {
         return state;
     };
     Groestl.prototype.compress = function (block, chainingInput) {
-        return _.xor(_.xor(this.P(_.xor(chainingInput, block)), this.Q(block)), chainingInput);
+        return Utils.xorMatrix(Utils.xorMatrix(this.P(Utils.xorMatrix(chainingInput, block)), this.Q(block)), chainingInput);
     };
     Groestl.prototype.hash = function (input) {
         var _this = this;
         var padded = this.pad(input);
-        console.log(padded.length, padded.join());
         var blocks = [];
         _.range(0, this.blockCount)
             .map(function (i) {
-            var block = padded.slice(i * _this.blockSize, _this.blockSize);
-            var block2d = _.range(0, 8).map(function (row) {
-                return _.range(0, _this.NB).map(function (col) {
-                    return block[row * _this.NB + col];
-                });
-            });
-            blocks.push(block2d);
+            var block = padded.slice(i * _this.blockSize / 8, (i + 1) * _this.blockSize / 8);
+            blocks.push(Utils.to2DArray(block, _this.NB, 8));
         });
         var chainingOutputs = [this.getInitialValue()];
-        blocks.map(function (block, i) {
-            chainingOutputs.push(_this.compress(block, chainingOutputs[i == 0 ? 0 : i - 1]));
+        _.range(0, this.blockCount).map(function (i) {
+            chainingOutputs[i + 1] = _this.compress(blocks[i], chainingOutputs[i]);
         });
-        var finalOutput = this.final(chainingOutputs[this.blockCount - 1]);
+        var finalOutput = this.final(chainingOutputs.slice(-1)[0]);
         return Utils.toHexString(finalOutput);
     };
+    Groestl.prototype.truncate = function (input) {
+        var input1D = Utils.to1DArray(input);
+        var bits = input1D.map(function (v) { return Utils.toBitsString(v); }).join('');
+        return Utils.bitsStringToBytes(bits.slice(-this.outputSize));
+    };
     Groestl.prototype.final = function (input) {
-        input = _.xor(this.P(input), input);
-        return Utils.to1DArray(input).slice();
+        return this.truncate(Utils.xorMatrix(this.P(input), input));
     };
     return Groestl;
 }());

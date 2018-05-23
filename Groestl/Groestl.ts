@@ -58,109 +58,81 @@ export default class Groestl {
         }
     }
 
-    // TODO: починить pad функцию - из-за нее все ломается
     pad (input: string) {
         const N = input.length * 8,
-            w = (- N - 65) % this.blockSize,
-            t = ( N + w + 65 ) / this.blockSize;
-        this.blockCount = t + 1;
-        console.log('N', N, w, t)
-        let bytes = Utils.stringBytesArray(input);
-        // console.log(bytes.join(' '))
-        bytes.unshift(0x1);
-        _.range(0, w).map(v => bytes.unshift(0x0));
-        bytes.unshift(t);
-        return bytes;
+            l = this.blockSize,
+            w = Utils.negMod(- N - 65, l),
+            t = ( N + w + 65 ) / l;
+        this.blockCount = t;
+        let bytes = Utils.stringToBytesArray(input);
+        let bits = bytes.map(v => Utils.toBitsString(v)).join('')
+        bits += 1;
+        bits += _.range(0, w).fill(0).join('');
+        bits += Utils.get64Representation(t).map(v => Utils.toBitsString(v)).join('');
+        return Utils.bitsStringToBytes(bits);
     }
 
     private addRoundConstantP (state: number[][], round: number) {
-        state = [...state];
-        let PTable = Utils.getP(this.NB, round);
-        return _.range(0, 8).map(r => {
-            _.range(0, this.NB).map(c => {
-                state[r][c] = PTable[r][c] ^ state[r][c];
-            })
-            return state[r];
-        })
+        return Utils.xorMatrix(state, Utils.getPTableConstant(this.NB, round));
     }
 
     private addRoundConstantQ (state: number[][], round: number) {
-        state = [...state];
-        let QTable = Utils.getQ(this.NB, round);
-        return _.range(0, 8).map(r => {
-            _.range(0, this.NB).map(c => {
-                state[r][c] = QTable[r][c] ^ state[r][c];
-            })
-            return state[r];
-        })
+        return Utils.xorMatrix(state, Utils.getQTableContstant(this.NB, round))
     }
 
     private subBytes (state: number[][]) {
-        state = [...state];
-        return _.range(0, 8).map(r => {
-            _.range(0, this.NB).map(c => {
-                state[r][c] = Utils.getSBoxValue(state[r][c]);
+        return state.map(row => {
+            return row.map(e => {
+                return Utils.getSBoxValue(e)
             })
-            return state[r];
         })
     }
 
     private shiftBytesP (state: number[][]) {
-        state = [...state];
-        let shiftArray = [];
-        switch (this.blockSize) {
-            case 512:
-                shiftArray = [0, 1, 2, 3, 4, 5, 6, 7];
-                break;
-            case 1024:
-                shiftArray = [1, 3, 5, 7, 0, 2, 4, 6];
-        }
-        _.range(0, 8)
-            .map(row => state[row] = Utils.shiftToLeft(state[row], shiftArray[row]))
-        return state;
+        let shiftArray = Utils.getPShifts(this.blockSize);
+        return _.range(0, 8).map(row => Utils.shiftToLeft(state[row], shiftArray[row]))
     }
 
     private shiftBytesQ (state: number[][]) {
-        state = [...state];
-        let shiftArray = [];
-        switch (this.blockSize) {
-            case 512:
-                shiftArray = [0, 1, 2, 3, 4, 5, 6, 11];
-                break;
-            case 1024:
-                shiftArray = [1, 3, 5, 11, 0, 2, 4, 6];
-        }
-        _.range(0, 8)
-            .map(row => state[row] = Utils.shiftToLeft(state[row], shiftArray[row]))
-        return state;
+        let shiftArray = Utils.getQShifts(this.blockSize);
+        return _.range(0, 8).map(row => Utils.shiftToLeft(state[row], shiftArray[row]))
     }
 
     private mixBytes (state: number[][]) {
-        state = [...state]
-        function mul1( b: number ) { return b ;}
-        function mul2( b: number ) { return ((0 != (b>>>7))?((b)<<1)^0x1b:((b)<<1)); }
-        function mul3( b: number ) { return (mul2(b) ^ mul1(b)); }
-        function mul4( b: number ) { return (mul2( mul2( b ))); }
-        function mul5( b: number ) { return (mul4(b) ^ mul1(b)); }
-        function mul6( b: number ) { return (mul4(b) ^ mul2(b)); }
-        function mul7( b: number ) { return (mul4(b) ^ mul2(b) ^ mul1(b)); }
-
-        _.range(0, this.NB).map(col => {
-            let temp = [];
-            _.range(0, 8).map(row => {
-                temp[row] =
-                    mul2(state[(row + 0) % 8][col]) ^ mul2(state[(row + 1) % 8][col]) ^
-                    mul3(state[(row + 2) % 8][col]) ^ mul4(state[(row + 3) % 8][col]) ^
-                    mul5(state[(row + 4) % 8][col]) ^ mul3(state[(row + 5) % 8][col]) ^
-                    mul5(state[(row + 6) % 8][col]) ^ mul7(state[(row + 7) % 8][col]);
-            })
-            _.range(0, 8).map(i => state[i][col] = temp[i])
+        let b02 = 2, b03 = 3, b05 = 5, b04 = 4, b07 = 7;
+        _.range(0, this.NB).map(c => {
+            let sp = [];
+            sp[0] = Utils.GF256(b02, state[0][c]) ^ Utils.GF256(b02, state[1][c]) ^ Utils.GF256(b03, state[2][c]) ^
+                Utils.GF256(b04, state[3][c]) ^ Utils.GF256(b05, state[4][c]) ^ Utils.GF256(b03, state[5][c]) ^
+                Utils.GF256(b05, state[6][c]) ^ Utils.GF256(b07, state[7][c])
+            sp[1] = Utils.GF256(b07, state[0][c]) ^ Utils.GF256(b02, state[1][c]) ^ Utils.GF256(b02, state[2][c]) ^
+                Utils.GF256(b03, state[3][c]) ^ Utils.GF256(b04, state[4][c]) ^ Utils.GF256(b05, state[5][c]) ^
+                Utils.GF256(b03, state[6][c]) ^ Utils.GF256(b05, state[7][c])
+            sp[2] = Utils.GF256(b05, state[0][c]) ^ Utils.GF256(b07, state[1][c]) ^ Utils.GF256(b02, state[2][c]) ^
+                Utils.GF256(b02, state[3][c]) ^ Utils.GF256(b03, state[4][c]) ^ Utils.GF256(b04, state[5][c]) ^
+                Utils.GF256(b05, state[6][c]) ^ Utils.GF256(b03, state[7][c])
+            sp[3] = Utils.GF256(b03, state[0][c]) ^ Utils.GF256(b05, state[1][c]) ^ Utils.GF256(b07, state[2][c]) ^
+                Utils.GF256(b02, state[3][c]) ^ Utils.GF256(b02, state[4][c]) ^ Utils.GF256(b03, state[5][c]) ^
+                Utils.GF256(b04, state[6][c]) ^ Utils.GF256(b05, state[7][c])
+            sp[4] = Utils.GF256(b05, state[0][c]) ^ Utils.GF256(b03, state[1][c]) ^ Utils.GF256(b05, state[2][c]) ^
+                Utils.GF256(b07, state[3][c]) ^ Utils.GF256(b02, state[4][c]) ^ Utils.GF256(b02, state[5][c]) ^
+                Utils.GF256(b03, state[6][c]) ^ Utils.GF256(b04, state[7][c])
+            sp[5] = Utils.GF256(b04, state[0][c]) ^ Utils.GF256(b05, state[1][c]) ^ Utils.GF256(b03, state[2][c]) ^
+                Utils.GF256(b05, state[3][c]) ^ Utils.GF256(b07, state[4][c]) ^ Utils.GF256(b02, state[5][c]) ^
+                Utils.GF256(b02, state[6][c]) ^ Utils.GF256(b03, state[7][c])
+            sp[6] = Utils.GF256(b03, state[0][c]) ^ Utils.GF256(b04, state[1][c]) ^ Utils.GF256(b05, state[2][c]) ^
+                Utils.GF256(b03, state[3][c]) ^ Utils.GF256(b05, state[4][c]) ^ Utils.GF256(b07, state[5][c]) ^
+                Utils.GF256(b02, state[6][c]) ^ Utils.GF256(b02, state[7][c])
+            sp[7] = Utils.GF256(b02, state[0][c]) ^ Utils.GF256(b03, state[1][c]) ^ Utils.GF256(b04, state[2][c]) ^
+                Utils.GF256(b05, state[3][c]) ^ Utils.GF256(b03, state[4][c]) ^ Utils.GF256(b05, state[5][c]) ^
+                Utils.GF256(b07, state[6][c]) ^ Utils.GF256(b02, state[7][c])
+            _.range(0, 8).map(i => state[i][c] = sp[i])
         })
         return state;
     }
 
     private P (state: number[][]) : number[][] {
-
+        state = [...state]
         _.range(0, this.rounds)
             .map(round => {
                 state = this.addRoundConstantP(state, round);
@@ -173,7 +145,7 @@ export default class Groestl {
     }
 
     private Q (state: number[][]) : number[][] {
-
+        state = [...state]
         _.range(0, this.rounds)
             .map(round => {
                 state = this.addRoundConstantQ(state, round);
@@ -181,14 +153,18 @@ export default class Groestl {
                 state = this.shiftBytesQ(state);
                 state = this.mixBytes(state);
             })
-
         return state;
     }
 
 
     compress (block: number[][], chainingInput: number[][]) {
-
-        return _.xor(_.xor(this.P(_.xor(chainingInput, block)), this.Q(block)), chainingInput);
+        return Utils.xorMatrix(
+            Utils.xorMatrix(
+                this.P(Utils.xorMatrix(chainingInput, block)),
+                this.Q(block)
+            ),
+            chainingInput
+        )
 
     }
 
@@ -196,36 +172,34 @@ export default class Groestl {
 
         let padded = this.pad(input);
 
-        console.log(padded.length, padded.join())
-
         let blocks = [];
 
         _.range(0, this.blockCount)
             .map(i => {
-                let block = padded.slice(i*this.blockSize, this.blockSize);
-                let block2d = _.range(0, 8).map(row => {
-                    return _.range(0, this.NB).map(col => {
-                        return block[row * this.NB + col]
-                    })
-                });
-                blocks.push(block2d)
+                let block = padded.slice(i*this.blockSize/8, (i+1)*this.blockSize/8);
+                blocks.push(Utils.to2DArray(block, this.NB, 8))
             })
 
         let chainingOutputs = [ this.getInitialValue() ];
 
-        blocks.map((block, i) => {
-            chainingOutputs.push(this.compress(block, chainingOutputs[i == 0 ? 0 : i - 1]))
+        _.range(0, this.blockCount).map(i => {
+            chainingOutputs[i+1] = this.compress(blocks[i], chainingOutputs[i]);
         })
 
-        let finalOutput = this.final(chainingOutputs[this.blockCount-1]);
+        let finalOutput = this.final(chainingOutputs.slice(-1)[0]);
 
         return Utils.toHexString(finalOutput)
 
     }
 
+    private truncate (input: number[][]) {
+        let input1D = Utils.to1DArray(input);
+        let bits = input1D.map(v => Utils.toBitsString(v)).join('')
+        return Utils.bitsStringToBytes(bits.slice(-this.outputSize))
+    }
+
     final (input: number[][]) {
-        input = _.xor(this.P(input), input);
-        return Utils.to1DArray(input).slice();
+        return this.truncate(Utils.xorMatrix(this.P(input), input));
     }
 
 

@@ -1,25 +1,64 @@
 import * as _ from 'lodash'
 import {blockSize, NB} from "./Groestl";
-
-
+import * as ieee from 'ieee-float'
+import {xorArrays} from "../Rijndael/Utils";
 
 export function getSBoxValue (n: number) {
     return sBox[n]
 }
 
-export function getMixBytes () {
-    return mixBytes
+export function xorMatrix (a: number[][], b: number[][]) {
+    return _.range(0, a.length).map(row => {
+        return xorArrays(a[row], b[row])
+    })
 }
 
-export function getBytesArray (input: string, size: number) {
-    return _.range(0, size).map((v, i) => i < input.length ? input.charCodeAt(i) : 0)
-}
-
-export function stringBytesArray(input: string) {
+export function stringToBytesArray(input: string) {
     return input.split('').map((l, i) => input.charCodeAt(i))
 }
 
-export function getP (NB: NB, round: number) {
+export function get64Representation (num: number) {
+    let output = [];
+    ieee.writeDoubleLE(output, num);
+    return output;
+}
+
+export function addInsignificantBits(integer) {
+    let a = integer.toString(2);
+    return new Array(8 - a.length).fill(0).join("") + a;
+}
+
+export function toBitsString (number: number) {
+    return addInsignificantBits(number);
+}
+
+export function bitsStringToBytes (input: string) {
+    let bytes = [];
+    for (let i = 0; i < input.length / 8; i++) {
+        bytes.push(parseInt(input.slice(i*8, (i+1)*8), 2))
+    }
+    return bytes
+}
+
+export function getPShifts (blockSize: blockSize) {
+    switch (blockSize) {
+        case 512:
+            return [0, 1, 2, 3, 4, 5, 6, 7];
+        case 1024:
+            return [0, 1, 2, 3, 4, 5, 6, 11];
+    }
+}
+
+export function getQShifts (blockSize: blockSize) {
+    switch (blockSize) {
+        case 512:
+            return [1, 3, 5, 7, 0, 2, 4, 6];
+        case 1024:
+            return [1, 3, 5, 11, 0, 2, 4, 6];
+    }
+}
+
+export function getPTableConstant (NB: NB, round: number) {
     let PTable = _.range(0, 8).map(row => {
         return _.range(0, NB).map(col => parseInt('0x00'));
     })
@@ -28,7 +67,7 @@ export function getP (NB: NB, round: number) {
     return PTable;
 }
 
-export function getQ (NB: NB, round: number) {
+export function getQTableContstant (NB: NB, round: number) {
     let QTable = _.range(0, 8).map(row => {
         return _.range(0, NB).map(col => parseInt('0xff'));
     })
@@ -39,24 +78,22 @@ export function getQ (NB: NB, round: number) {
             break;
         case 16:
             _.range(15, -1)
-                .map((e, i) => QTable[QTable.length-1][i] = parseInt(`0x${e.toString(16)}f`))
+                .map((e, i) => QTable[QTable.length-1][i] = parseInt(`0x${e.toString(16)}f`) ^ round)
     }
     return QTable;
 }
 
 export function shiftToLeft(array: any[], pos: number) {
-    let temp = new Array(array.length);
-    _.range(0, array.length)
-        .map(i => {
-            let ind = i + (array.length - pos);
-            if (ind >= array.length) {
-                temp[ind - array.length] = array[i];
-            } else temp[ind] = array[i];
-        });
-    return temp;
+    let newLeft = array.slice(pos),
+        newRight = array.slice(0, pos)
+    return [...newLeft, ...newRight];
 }
 
-export function FGMult (a: number, b: number) {
+export function negMod (a, b) {
+    return b - (Math.abs(a) % b)
+}
+
+export function GF256 (a: number, b: number) : number {
     let aa = a, bb = b, r = 0, t;
     while (aa != 0) {
         if ((aa & 1) != 0) r = r ^ bb;
@@ -75,10 +112,17 @@ export function to1DArray (array: number[][]) {
     return arr;
 }
 
+export function to2DArray (array: number[], cols: number, rows:number) : number[][] {
+    let arr = [];
+    _.range(0, rows).map(row => {
+        arr[row] = array.slice(row*cols, (row+1)*cols);
+    })
+    return arr;
+}
+
 export function toHexString (array: number[]) {
     return array.map(n => n.toString(16)).join("");
 }
-
 
 const sBox = [
     0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
@@ -97,15 +141,4 @@ const sBox = [
     0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
     0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
     0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16
-]
-
-const mixBytes = [
-    [0x02, 0x02, 0x03, 0x04, 0x05, 0x03, 0x05, 0x07],
-    [0x07, 0x02, 0x02, 0x03, 0x04, 0x05, 0x03, 0x05],
-    [0x05, 0x07, 0x02, 0x02, 0x03, 0x04, 0x05, 0x03],
-    [0x03, 0x05, 0x07, 0x02, 0x02, 0x03, 0x04, 0x05],
-    [0x05, 0x03, 0x05, 0x07, 0x02, 0x02, 0x03, 0x04],
-    [0x04, 0x05, 0x03, 0x05, 0x07, 0x02, 0x02, 0x03],
-    [0x03, 0x04, 0x05, 0x03, 0x05, 0x07, 0x02, 0x02],
-    [0x02, 0x03, 0x04, 0x05, 0x03, 0x05, 0x07, 0x02]
 ]

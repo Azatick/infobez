@@ -1,23 +1,64 @@
 "use strict";
 exports.__esModule = true;
 var _ = require("lodash");
+var ieee = require("ieee-float");
+var Utils_1 = require("../Rijndael/Utils");
 function getSBoxValue(n) {
     return sBox[n];
 }
 exports.getSBoxValue = getSBoxValue;
-function getMixBytes() {
-    return mixBytes;
+function xorMatrix(a, b) {
+    return _.range(0, a.length).map(function (row) {
+        return Utils_1.xorArrays(a[row], b[row]);
+    });
 }
-exports.getMixBytes = getMixBytes;
-function getBytesArray(input, size) {
-    return _.range(0, size).map(function (v, i) { return i < input.length ? input.charCodeAt(i) : 0; });
-}
-exports.getBytesArray = getBytesArray;
-function stringBytesArray(input) {
+exports.xorMatrix = xorMatrix;
+function stringToBytesArray(input) {
     return input.split('').map(function (l, i) { return input.charCodeAt(i); });
 }
-exports.stringBytesArray = stringBytesArray;
-function getP(NB, round) {
+exports.stringToBytesArray = stringToBytesArray;
+function get64Representation(num) {
+    var output = [];
+    ieee.writeDoubleLE(output, num);
+    return output;
+}
+exports.get64Representation = get64Representation;
+function addInsignificantBits(integer) {
+    var a = integer.toString(2);
+    return new Array(8 - a.length).fill(0).join("") + a;
+}
+exports.addInsignificantBits = addInsignificantBits;
+function toBitsString(number) {
+    return addInsignificantBits(number);
+}
+exports.toBitsString = toBitsString;
+function bitsStringToBytes(input) {
+    var bytes = [];
+    for (var i = 0; i < input.length / 8; i++) {
+        bytes.push(parseInt(input.slice(i * 8, (i + 1) * 8), 2));
+    }
+    return bytes;
+}
+exports.bitsStringToBytes = bitsStringToBytes;
+function getPShifts(blockSize) {
+    switch (blockSize) {
+        case 512:
+            return [0, 1, 2, 3, 4, 5, 6, 7];
+        case 1024:
+            return [0, 1, 2, 3, 4, 5, 6, 11];
+    }
+}
+exports.getPShifts = getPShifts;
+function getQShifts(blockSize) {
+    switch (blockSize) {
+        case 512:
+            return [1, 3, 5, 7, 0, 2, 4, 6];
+        case 1024:
+            return [1, 3, 5, 11, 0, 2, 4, 6];
+    }
+}
+exports.getQShifts = getQShifts;
+function getPTableConstant(NB, round) {
     var PTable = _.range(0, 8).map(function (row) {
         return _.range(0, NB).map(function (col) { return parseInt('0x00'); });
     });
@@ -25,8 +66,8 @@ function getP(NB, round) {
         .map(function (e, i) { return PTable[0][i] = parseInt("0x" + e.toString(16) + "0") ^ round; });
     return PTable;
 }
-exports.getP = getP;
-function getQ(NB, round) {
+exports.getPTableConstant = getPTableConstant;
+function getQTableContstant(NB, round) {
     var QTable = _.range(0, 8).map(function (row) {
         return _.range(0, NB).map(function (col) { return parseInt('0xff'); });
     });
@@ -37,26 +78,21 @@ function getQ(NB, round) {
             break;
         case 16:
             _.range(15, -1)
-                .map(function (e, i) { return QTable[QTable.length - 1][i] = parseInt("0x" + e.toString(16) + "f"); });
+                .map(function (e, i) { return QTable[QTable.length - 1][i] = parseInt("0x" + e.toString(16) + "f") ^ round; });
     }
     return QTable;
 }
-exports.getQ = getQ;
+exports.getQTableContstant = getQTableContstant;
 function shiftToLeft(array, pos) {
-    var temp = new Array(array.length);
-    _.range(0, array.length)
-        .map(function (i) {
-        var ind = i + (array.length - pos);
-        if (ind >= array.length) {
-            temp[ind - array.length] = array[i];
-        }
-        else
-            temp[ind] = array[i];
-    });
-    return temp;
+    var newLeft = array.slice(pos), newRight = array.slice(0, pos);
+    return newLeft.concat(newRight);
 }
 exports.shiftToLeft = shiftToLeft;
-function FGMult(a, b) {
+function negMod(a, b) {
+    return b - (Math.abs(a) % b);
+}
+exports.negMod = negMod;
+function GF256(a, b) {
     var aa = a, bb = b, r = 0, t;
     while (aa != 0) {
         if ((aa & 1) != 0)
@@ -69,7 +105,7 @@ function FGMult(a, b) {
     }
     return r;
 }
-exports.FGMult = FGMult;
+exports.GF256 = GF256;
 function to1DArray(array) {
     var arr = [];
     _.range(0, array.length)
@@ -77,6 +113,14 @@ function to1DArray(array) {
     return arr;
 }
 exports.to1DArray = to1DArray;
+function to2DArray(array, cols, rows) {
+    var arr = [];
+    _.range(0, rows).map(function (row) {
+        arr[row] = array.slice(row * cols, (row + 1) * cols);
+    });
+    return arr;
+}
+exports.to2DArray = to2DArray;
 function toHexString(array) {
     return array.map(function (n) { return n.toString(16); }).join("");
 }
@@ -98,14 +142,4 @@ var sBox = [
     0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
     0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
     0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
-];
-var mixBytes = [
-    [0x02, 0x02, 0x03, 0x04, 0x05, 0x03, 0x05, 0x07],
-    [0x07, 0x02, 0x02, 0x03, 0x04, 0x05, 0x03, 0x05],
-    [0x05, 0x07, 0x02, 0x02, 0x03, 0x04, 0x05, 0x03],
-    [0x03, 0x05, 0x07, 0x02, 0x02, 0x03, 0x04, 0x05],
-    [0x05, 0x03, 0x05, 0x07, 0x02, 0x02, 0x03, 0x04],
-    [0x04, 0x05, 0x03, 0x05, 0x07, 0x02, 0x02, 0x03],
-    [0x03, 0x04, 0x05, 0x03, 0x05, 0x07, 0x02, 0x02],
-    [0x02, 0x03, 0x04, 0x05, 0x03, 0x05, 0x07, 0x02]
 ];

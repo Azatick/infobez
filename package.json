@@ -9,6 +9,7 @@
     "@types/mocha": "^5.1.0",
     "@types/text-encoding": "^0.0.32",
     "chai": "^4.1.2",
+    "ieee-float": "^0.6.0",
     "lodash": "^4.17.5",
     "mocha": "^5.1.1",
     "rye": "^0.0.3",
